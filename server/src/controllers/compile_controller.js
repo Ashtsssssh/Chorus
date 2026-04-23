@@ -3,9 +3,42 @@ const Job = require('../models/job');
 const { compile } = require('../services/compile_service');
 const { sha256, buildOutputUrl } = require('../utils/file_helpers');
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function logCompileFlow(level, message, meta = {}) {
+  const payload = {
+    ts: nowIso(),
+    level,
+    scope: 'compile-controller',
+    message,
+    ...meta,
+  };
+  const line = JSON.stringify(payload);
+  if (level === 'error') {
+    console.error(line);
+    return;
+  }
+  if (level === 'warn') {
+    console.warn(line);
+    return;
+  }
+  console.log(line);
+}
+
 // POST /api/compile
 async function submitJob(req, res) {
   const files = req.files || {};
+  const forceRecompile = String(req.body.forceRecompile || '').toLowerCase() === 'true' || req.body.forceRecompile === '1' || req.body.forceRecompile === 1 || req.body.forceRecompile === true;
+
+  logCompileFlow('info', 'submitJob request received', {
+    requestJobId: req.jobId,
+    submitterId: req.body.submitterId || null,
+    bodyKeys: Object.keys(req.body || {}),
+    fileFields: Object.keys(files),
+    forceRecompile,
+  });
 
   if (!req.body.submitterId)   return res.status(400).json({ error: 'submitterId is required' });
   if (!files.source?.[0])      return res.status(400).json({ error: 'source (.cpp) file is required' });
@@ -25,8 +58,29 @@ async function submitJob(req, res) {
 
   const sourceHash = sha256(fs.readFileSync(sourceFile.path));
 
+  logCompileFlow('info', 'uploaded files accepted', {
+    requestJobId: uploadJobId,
+    sourcePath: sourceFile.path,
+    sourceOriginalName: sourceFile.originalname,
+    sourceSizeBytes: sourceFile.size,
+    dataFilePath: dataFile.path,
+    dataFileOriginalName: dataFile.originalname,
+    dataFileSizeBytes: dataFile.size,
+    chunkerType,
+    assemblerType,
+    sourceHash,
+  });
+
   // Check if we already compiled this exact source
-  const cached = await Job.findOne({ sourceHash, status: 'ready' });
+  const cached = forceRecompile ? null : await Job.findOne({ sourceHash, status: 'ready' });
+
+  logCompileFlow('info', 'cache lookup complete', {
+    requestJobId: uploadJobId,
+    sourceHash,
+    cacheBypassed: forceRecompile,
+    cacheHit: !!cached,
+    cachedJobId: cached ? cached._id.toString() : null,
+  });
 
   const job = await Job.create({
     submitterId: req.body.submitterId,
@@ -44,6 +98,14 @@ async function submitJob(req, res) {
 
   const dbJobId = job._id.toString();
 
+  logCompileFlow('info', 'job created', {
+    requestJobId: uploadJobId,
+    dbJobId,
+    status: job.status,
+    forceRecompile,
+    cacheHit: !!cached,
+  });
+
   // Respond immediately — client polls for status
   res.status(202).json({ job: job.toPublic() });
 
@@ -51,17 +113,41 @@ async function submitJob(req, res) {
   if (!cached) {
     try {
       // Keep upload directory UUID separate from Mongo ObjectId.
+      logCompileFlow('info', 'background compile started', {
+        dbJobId,
+        sourcePath: sourceFile.path,
+      });
+
       const { wasmPath, wasmFilename } = await compile(sourceFile.path, dbJobId);
       await Job.findByIdAndUpdate(dbJobId, {
         status: 'ready',
         'assets.wasmBinary': { diskPath: wasmPath, url: buildOutputUrl(wasmFilename) },
       });
+
+      logCompileFlow('info', 'background compile completed', {
+        dbJobId,
+        wasmPath,
+        wasmFilename,
+      });
     } catch (err) {
+      logCompileFlow('error', 'background compile failed', {
+        dbJobId,
+        sourcePath: sourceFile.path,
+        error: err.message,
+        stack: err.stack,
+      });
+
       await Job.findByIdAndUpdate(dbJobId, {
         status: 'failed',
         errorDetail: err.message,
       });
     }
+  } else {
+    logCompileFlow('info', 'compile skipped due to cache hit', {
+      dbJobId,
+      cachedJobId: cached._id.toString(),
+      forceRecompile,
+    });
   }
 }
 
