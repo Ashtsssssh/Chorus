@@ -30,6 +30,7 @@ const jobSchema = new mongoose.Schema({
     diskPath:   { type: String, required: true },
     status:     { type: String, enum: ['pending', 'in-flight', 'complete', 'failed'], default: 'pending' },
     resultPath: { type: String, default: null },
+    resultHash: { type: String, default: null },
   }],
 
   errorDetail:  { type: String, default: null },
