@@ -1,0 +1,21 @@
+
+
+innovations
+
+
+
+problems faced
+
+Q-how will you chunk, syncing it will be difficult ?
+A- custom chunking for user customizing option and teess reduction at server
+
+Q-Correct ordereding of processing?
+A-queue of chunks!
+
+Q-server cant handle multiple chunking simultaneously?(NETWORK VS SERVER TRADEOFF)
+A-shift chunking to job uploader's device, reduce stress and safety issues as well
+
+
+
+
+

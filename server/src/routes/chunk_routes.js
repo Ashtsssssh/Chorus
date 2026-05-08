@@ -2,11 +2,28 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { getChunk, submitResult } = require('../controllers/chunk_controller');
+const {
+  claimChunk,
+  uploadChunk,
+  getChunk,
+  submitResult,
+  getResultData,
+  jobEvents,
+} = require('../controllers/chunk_controller');
 
 const router = express.Router();
 
-// Results are stored under output/results/<jobId>/
+const chunkStorage = multer.diskStorage({
+  destination(req, file, cb) {
+    const dir = path.join(__dirname, '../../uploads', req.params.jobId, 'chunks');
+    require('fs').mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename(req, file, cb) {
+    cb(null, `chunk-${req.body.index || uuidv4()}.bin`);
+  },
+});
+
 const resultStorage = multer.diskStorage({
   destination(req, file, cb) {
     const dir = path.join(__dirname, '../../output/results', req.params.jobId);
@@ -14,13 +31,19 @@ const resultStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename(req, file, cb) {
-    cb(null, `chunk-${req.params.index}-${uuidv4()}.bin`);
+    cb(null, `result-${req.params.index}-${uuidv4()}.bin`);
   },
 });
 
-const uploadResult = multer({ storage: resultStorage });
+const uploadChunkMiddleware  = multer({ storage: chunkStorage });
+const uploadResultMiddleware = multer({ storage: resultStorage });
 
-router.get('/:jobId/:index',               getChunk);
-router.post('/:jobId/:index/result',       uploadResult.single('result'), submitResult);
+// Order matters — specific routes before parameterised ones
+router.get('/:jobId/events',              jobEvents);
+router.post('/:jobId/claim',              claimChunk);
+router.post('/:jobId/upload',             uploadChunkMiddleware.single('chunk'), uploadChunk);
+router.get('/:jobId/:index',              getChunk);
+router.get('/:jobId/:index/result-data',  getResultData);
+router.post('/:jobId/:index/result',      uploadResultMiddleware.single('result'), submitResult);
 
 module.exports = router;

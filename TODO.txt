@@ -1,0 +1,58 @@
+Part 1 — WASM Compilation Service
+Build the backend endpoint that accepts C++ source, compiles it via Emscripten, and returns a .wasm binary. Get this right first — everything downstream depends on it. Test it with a trivial algorithm (e.g. sum an array).
+Part 2 — Chunker & Assembler Runtime
+Define the WASI interface contract for chunker and assembler modules. Build the backend runner that executes them in a WASM sandbox. Test with a simple file split (line-based or byte-range) and a concat assembler.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Part 3 — Worker Client (WASM Executor)
+Build the worker as a standalone browser page or Node script. It should: receive a .wasm URL + data chunk, execute the module, and return the result + SHA-256 hash. No networking yet — just feed it inputs manually and verify outputs.
+COMPELTE THE PART -3 THEN
+now i want main to get these changes as well 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Part 4 — Backend State & WebSocket Layer
+Build the coordinator: job state in a database, worker registry in memory, WebSocket server that pushes chunks and receives results. Wire Part 3's worker to this. At this point you have a working end-to-end pipeline, even if it's fragile.
+
+
+Part 5 — Fault Tolerance
+Add TTL timers, heartbeat ping/pong, disconnect handling, and chunk reassignment. Simulate worker failures and verify chunks get reassigned correctly.
+Part 6 — Verification Layer
+Add dual-dispatch sampling, hash comparison, tiebreaker dispatch, and reputation scoring. Start with a fixed 20% sample rate, make it adaptive later.
+Part 7 — Job Submission & Delivery
+Build the submitter-facing API: upload endpoint, job status SSE stream, and final output delivery. This is mostly glue at this point since the core is already working.
+Part 8 — Hardening
+Signed result tokens, worker authentication, WASM feature detection (SIMD fallback), epsilon-based verification for numerical workloads, and the .wasm binary cache.
+
+
+
+
+
+
+
+POST POLISH-
+
+frontend state and job routes,start and assemble ad downlaod options
