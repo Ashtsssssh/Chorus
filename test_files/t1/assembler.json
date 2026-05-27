@@ -1,0 +1,37 @@
+{
+  "assemblerId": "t1-assembler",
+  "outputFile": "output_result.bin",
+  "assemblyStrategy": {
+    "type": "sum_aggregation",
+    "description": "Sum all partial results from workers"
+  },
+  "chunkResults": [
+    {
+      "chunkIndex": 0,
+      "expectedResult": 300,
+      "description": "Sum of integers 0-24 (0+1+2+...+24) = 300"
+    },
+    {
+      "chunkIndex": 1,
+      "expectedResult": 1325,
+      "description": "Sum of integers 25-49 (25+26+...+49) = 1325"
+    },
+    {
+      "chunkIndex": 2,
+      "expectedResult": 2350,
+      "description": "Sum of integers 50-74 (50+51+...+74) = 2350"
+    },
+    {
+      "chunkIndex": 3,
+      "expectedResult": 3375,
+      "description": "Sum of integers 75-99 (75+76+...+99) = 3375"
+    },
+    {
+      "chunkIndex": 4,
+      "expectedResult": 5400,
+      "description": "Sum of integers 100-124 (100+101+...+124) = 5400"
+    }
+  ],
+  "finalResult": 12750,
+  "resultFormat": "32-bit signed integer (binary)"
+}

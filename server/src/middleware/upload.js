@@ -1,13 +1,14 @@
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { ensureDir, uploadsDir } = require('../utils/file_helpers');
+const { ensureDir } = require('../utils/file_helpers');
+
+const TEMP_DIR = path.join(__dirname, '../../uploads/temp');
 
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    const dir = uploadsDir(req.jobId);
-    ensureDir(dir);
-    cb(null, dir);
+    ensureDir(TEMP_DIR);
+    cb(null, TEMP_DIR);
   },
   filename(req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase();

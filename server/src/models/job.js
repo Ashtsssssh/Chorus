@@ -9,60 +9,86 @@ const assetSchema = new mongoose.Schema({
 
 const jobSchema = new mongoose.Schema({
   submitterId: { type: String, required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  
+  jobName: { type: String, default: 'Untitled Job' },
+  description: { type: String, default: '' },
+
   status: {
     type: String,
-    enum: ['pending', 'compiling', 'ready', 'chunking', 'distributing', 'assembling', 'complete', 'failed'],
+    enum: ['pending', 'compiling', 'ready', 'distributing', 'complete', 'failed'],
     default: 'pending',
   },
-  sourceHash: { type: String, required: true },
-  assets: {
-    dataFile:   { type: assetSchema, default: null },
-    chunker:    { type: assetSchema, default: null },
-    assembler:  { type: assetSchema, default: null },
-    wasmBinary: { type: assetSchema, default: null },
-    finalOutput:{ type: assetSchema, default: null },
+
+  visibility: {
+    type: String,
+    enum: ['public', 'private', 'protected'],
+    default: 'public',
   },
-  chunkerType:  { type: String, enum: ['line', 'csv', 'json-array', 'byte-range'], required: true },
-  assemblerType:{ type: String, enum: ['line', 'csv', 'json-array', 'byte-range'], required: true },
+
+  password: { type: String, default: null },
+
+  sourceHash:  { type: String, required: true },
+  totalChunks: { type: Number, default: null },
+  
+  assemblerStrategy: {
+    type: String,
+    enum: ['line', 'csv', 'json-array', 'byte-range'],
+    default: 'byte-range',
+  },
+
+  assemblerFilePath: { type: String, default: null },
+
+  assets: {
+    wasmBinary: { type: assetSchema, default: null },
+  },
 
   chunks: [{
-    index:      { type: Number, required: true },
-    diskPath:   { type: String, required: true },
-    status:     { type: String, enum: ['pending', 'in-flight', 'complete', 'failed'], default: 'pending' },
-    resultPath: { type: String, default: null },
-    resultHash: { type: String, default: null },
+    index:      { type: Number,  required: true },
+    diskPath:   { type: String,  required: true },
+    status:     { type: String,  enum: ['pending', 'in-flight', 'complete', 'failed'], default: 'pending' },
+    workerId:   { type: String,  default: null },
+    resultPath: { type: String,  default: null },
+    resultHash: { type: String,  default: null },
   }],
 
-  errorDetail:  { type: String, default: null },
+  errorDetail: { type: String, default: null },
+
 }, { timestamps: true });
 
-// Strip internal disk paths before sending to client
 jobSchema.methods.toPublic = function () {
   const strip = (asset) => {
     if (!asset) return null;
     const { diskPath, ...rest } = asset.toObject ? asset.toObject() : asset;
     return rest;
   };
+
+  const completedChunks = this.chunks.filter(c => c.status === 'complete').length;
+  const workers = new Set(this.chunks.filter(c => c.workerId).map(c => c.workerId)).size;
+
   return {
     id:          this._id,
     submitterId: this.submitterId,
+    userId:      this.userId,
+    name:        this.jobName,
+    description: this.description,
     status:      this.status,
+    visibility:  this.visibility,
+    totalChunks: this.totalChunks,
+    completedChunks: completedChunks,
+    workerCount: workers,
+    assemblerStrategy: this.assemblerStrategy,
     assets: {
-      dataFile:   strip(this.assets.dataFile),
-      chunker:    strip(this.assets.chunker),
-      assembler:  strip(this.assets.assembler),
       wasmBinary: strip(this.assets.wasmBinary),
-      finalOutput:strip(this.assets.finalOutput),
     },
-    errorDetail:  this.errorDetail,
-    chunkerType:  this.chunkerType,
-    assemblerType:this.assemblerType,
-    chunks:       this.chunks.map(c => ({
-      index:      c.index,
-      status:     c.status,
-      hasResult:  !!c.resultPath,
+    chunks: this.chunks.map(c => ({
+      index:     c.index,
+      status:    c.status,
+      workerId:  c.workerId,
+      hasResult: !!c.resultPath,
     })),
-    createdAt:    this.createdAt,
+    errorDetail: this.errorDetail,
+    createdAt:   this.createdAt,
   };
 };
 

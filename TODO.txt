@@ -1,0 +1,20 @@
+ 
+Part 5 — Fault Tolerance
+Add TTL timers, heartbeat ping/pong, disconnect handling, and chunk reassignment. Simulate worker failures and verify chunks get reassigned correctly.
+
+
+Part 6 — Verification Layer
+Add dual-dispatch sampling, hash comparison, tiebreaker dispatch, and reputation scoring. Start with a fixed 20% sample rate, make it adaptive later.
+ 
+Part 8 — Hardening
+Signed result tokens, worker authentication, WASM feature detection (SIMD fallback), epsilon-based verification for numerical workloads, and the .wasm binary cache.
+
+
+
+
+
+
+
+POST POLISH-
+
+frontend state and job routes,start and assemble ad downlaod options

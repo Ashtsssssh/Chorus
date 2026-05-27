@@ -1,0 +1,11 @@
+id,name,score,status
+1,alice,85,active
+2,bob,60,inactive
+3,charlie,92,active
+4,diana,78,active
+5,eve,45,inactive
+6,frank,88,active
+7,grace,72,active
+8,henry,55,inactive
+9,iris,91,active
+10,jack,67,inactive
