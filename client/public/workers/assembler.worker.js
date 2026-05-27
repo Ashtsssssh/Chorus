@@ -60,7 +60,7 @@ self.onmessage = async (e) => {
       throw new Error('Assembler error: ' + err.message);
     }
 
-    const blob = new Blob([finalOutput], { type: 'text/plain' });
+    const blob = new Blob([finalOutput], { type: 'application/octet-stream' });
     self.postMessage({ type: 'done', blob });
 
   } catch (err) {

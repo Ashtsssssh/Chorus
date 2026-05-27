@@ -3,15 +3,18 @@ import { submitJob, getJob, subscribeToJobEvents } from './api.js';
 
 const SERVER_URL = 'http://localhost:5000';
 
-export default function Submitter() {
+export default function Submitter({ user, onJobSubmitted }) {
   const [stage, setStage]         = useState('idle');
   const [jobId, setJobId]         = useState(null);
   const [progress, setProgress]   = useState({ current: 0, total: 0, label: '' });
   const [error, setError]         = useState(null);
   const [outputUrl, setOutputUrl] = useState(null);
+  const [visibility, setVisibility] = useState('public');
+  const [jobName, setJobName] = useState('');
+  const [description, setDescription] = useState('');
+  const [password, setPassword] = useState('');
 
-  const chunkerCodeRef   = useRef(null);
-  const assemblerCodeRef = useRef(null);
+  const chunkerCodeRef = useRef(null);
 
   const readText = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -29,24 +32,28 @@ export default function Submitter() {
     const sourceFile    = form.get('source');
     const dataFile      = form.get('dataFile');
     const chunkerFile   = form.get('chunker');
-    const assemblerFile = form.get('assembler');
 
     try {
-      // Step 1: Read scripts
+      // Step 1: Read chunker script
       setStage('compiling');
-      setProgress({ current: 0, total: 0, label: 'Loading scripts...' });
+      setProgress({ current: 0, total: 0, label: 'Reading input files...' });
 
-      const chunkerCode   = await readText(chunkerFile);
-      const assemblerCode = await readText(assemblerFile);
-      chunkerCodeRef.current   = chunkerCode;
-      assemblerCodeRef.current = assemblerCode;
+      const chunkerCode = await readText(chunkerFile);
+      chunkerCodeRef.current = chunkerCode;
 
       // Step 2: Submit job (C++ only)
-      setProgress({ current: 0, total: 0, label: 'Compiling C++ to WASM...' });
+      setProgress({ current: 0, total: 0, label: 'Compiling algorithm to WASM...' });
 
       const uploadForm = new FormData();
-      uploadForm.append('submitterId', 'system');
+      uploadForm.append('submitterId', user.id);
       uploadForm.append('source', sourceFile);
+      uploadForm.append('visibility', visibility);
+      uploadForm.append('jobName', jobName || 'Untitled Job');
+      uploadForm.append('description', description || '');
+
+      if (visibility === 'protected' && password) {
+        uploadForm.append('password', password);
+      }
 
       const { job } = await submitJob(uploadForm);
       setJobId(job.id);
@@ -55,26 +62,13 @@ export default function Submitter() {
 
       // Step 3: Chunk + upload via Web Worker
       setStage('chunking');
-      setProgress({ current: 0, total: 0, label: 'Chunking file...' });
+      setProgress({ current: 0, total: 0, label: 'Processing input data...' });
 
-      const totalChunks = await runChunkerWorker(dataFile, job.id, chunkerCode);
+      await runChunkerWorker(dataFile, job.id, chunkerCode);
 
-      // Step 4: Wait for workers via SSE
-      setStage('waiting');
-      setProgress({ current: 0, total: totalChunks, label: 'Workers processing chunks...' });
-
-      await waitForCompletion(job.id, totalChunks);
-
-      // Step 5: Fetch + assemble via Web Worker
-      setStage('assembling');
-      setProgress({ current: 0, total: totalChunks, label: 'Fetching results...' });
-
-      const outputBlob = await runAssemblerWorker(job.id, totalChunks, assemblerCode);
-
-      // Step 6: Download
-      const url = URL.createObjectURL(outputBlob);
-      setOutputUrl(url);
+      // Redirect to job dashboard
       setStage('complete');
+      window.location.href = `/uploaded-job/${job.id}`;
 
     } catch (err) {
       setError(err.message);
@@ -84,7 +78,7 @@ export default function Submitter() {
 
   const runChunkerWorker = (file, jobId, chunkerCode) => {
     return new Promise((resolve, reject) => {
-      const worker = new Worker(process.env.PUBLIC_URL + '/workers/chunker.worker.js');
+      const worker = new Worker('/workers/chunker.worker.js');
       worker.postMessage({ file, jobId, chunkerCode, serverUrl: SERVER_URL });
 
       worker.onmessage = (e) => {
@@ -104,7 +98,7 @@ export default function Submitter() {
         }
         if (type === 'done') {
           worker.terminate();
-          resolve(e.data.totalChunks);
+          resolve();
         }
         if (type === 'error') {
           worker.terminate();
@@ -115,36 +109,6 @@ export default function Submitter() {
       worker.onerror = (err) => {
         worker.terminate();
         reject(new Error('Chunker worker error: ' + err.message));
-      };
-    });
-  };
-
-  const runAssemblerWorker = (jobId, totalChunks, assemblerCode) => {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(process.env.PUBLIC_URL + '/workers/assembler.worker.js');
-      worker.postMessage({ jobId, totalChunks, assemblerCode, serverUrl: SERVER_URL });
-
-      worker.onmessage = (e) => {
-        const { type } = e.data;
-        if (type === 'status') {
-          setProgress(prev => ({ ...prev, label: e.data.message }));
-        }
-        if (type === 'progress') {
-          setProgress({ current: e.data.fetched, total: totalChunks, label: 'Fetching results...' });
-        }
-        if (type === 'done') {
-          worker.terminate();
-          resolve(e.data.blob);
-        }
-        if (type === 'error') {
-          worker.terminate();
-          reject(new Error(e.data.message));
-        }
-      };
-
-      worker.onerror = (err) => {
-        worker.terminate();
-        reject(new Error('Assembler worker error: ' + err.message));
       };
     });
   };
@@ -169,86 +133,98 @@ export default function Submitter() {
     });
   };
 
-  const waitForCompletion = (jobId, totalChunks) => {
-    return new Promise((resolve, reject) => {
-      const pollInterval = setInterval(async () => {
-        try {
-          const { job } = await getJob(jobId);
-          const done = job.chunks.filter(c => c.status === 'complete').length;
-          setProgress({ current: done, total: totalChunks, label: 'Workers processing chunks...' });
-        } catch (_) {}
-      }, 2000);
-
-      subscribeToJobEvents(jobId, () => {
-        clearInterval(pollInterval);
-        resolve();
-      });
-
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        reject(new Error('Job timed out'));
-      }, 30 * 60 * 1000);
-    });
-  };
-
-  if (stage === 'idle') return <SubmitForm onSubmit={handleSubmit} />;
+  if (stage === 'idle') return <SubmitForm onSubmit={handleSubmit} visibility={visibility} onVisibilityChange={setVisibility} jobName={jobName} onJobNameChange={setJobName} description={description} onDescriptionChange={setDescription} password={password} onPasswordChange={setPassword} />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Job Progress</h1>
+    <div
+      className="min-h-screen flex items-center justify-center p-4 sm:p-8"
+      style={{ background: 'var(--color-bg)' }}
+    >
+      <div
+        className="rounded-2xl p-8 max-w-md w-full shadow-2xl"
+        style={{
+          background: 'rgba(var(--color-accent-rgb), 0.08)',
+          border: '1px solid var(--color-border)',
+          backdropFilter: 'blur(12px)',
+        }}
+      >
+        <h1
+          className="text-3xl font-bold tracking-tight mb-8"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
+          Job Progress
+        </h1>
 
         {jobId && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500">Job ID</p>
-            <p className="font-mono text-sm text-gray-800 break-all">{jobId}</p>
+          <div
+            className="mb-6 p-4 rounded-xl"
+            style={{
+              background: 'rgba(var(--color-accent-rgb), 0.12)',
+              border: '1px solid var(--color-border)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <p className="text-xs font-semibold tracking-wide mb-2 uppercase" style={{ color: 'var(--color-text-secondary)' }}>Job ID</p>
+            <p className="font-mono text-sm break-all font-medium" style={{ color: 'var(--color-accent)' }}>{jobId}</p>
           </div>
         )}
 
         <StageIndicator stage={stage} />
 
-        <div className="mt-6">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>{progress.label}</span>
+        <div className="mt-8">
+          <div className="flex justify-between text-sm mb-3">
+            <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{progress.label}</span>
             {progress.total > 0 && (
-              <span>{progress.current}/{progress.total}</span>
+              <span style={{ color: 'var(--color-text-secondary)' }} className="font-medium">{progress.current}/{progress.total}</span>
             )}
           </div>
           {progress.total > 0 && (
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full rounded-full h-2" style={{ background: 'rgba(var(--color-accent-rgb), 0.15)' }}>
               <div
-                className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: Math.round((progress.current / progress.total) * 100) + '%' }}
+                className="h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: Math.round((progress.current / progress.total) * 100) + '%',
+                  background: 'var(--color-accent)',
+                }}
               />
             </div>
           )}
         </div>
 
         {error && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{error}</p>
+          <div
+            className="mt-6 p-4 rounded-xl"
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+            }}
+          >
+            <p className="text-sm font-medium" style={{ color: '#ef4444' }}>{error}</p>
             <button
               onClick={() => setStage('idle')}
-              className="mt-2 text-sm text-red-600 underline"
+              className="mt-3 text-sm font-semibold transition-colors"
+              style={{ color: '#ef4444' }}
+              onMouseEnter={(e) => e.target.style.color = '#dc2626'}
+              onMouseLeave={(e) => e.target.style.color = '#ef4444'}
             >
-              Try again
+              Try again →
             </button>
           </div>
         )}
 
         {stage === 'complete' && outputUrl && (
-          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-            <p className="text-green-700 font-semibold mb-3">Complete!</p>
+          <div className="mt-6 p-5 bg-green-600 bg-opacity-20 border border-green-500 border-opacity-50 rounded-xl text-center">
+            <p className="text-green-300 font-bold mb-4">✓ Complete!</p>
             <a
               href={outputUrl}
               download="output.txt"
-              className="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg"
+              className="inline-block bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white text-sm font-semibold py-2.5 px-6 rounded-lg transition-all duration-200 shadow-md"
             >
               Download Output
             </a>
             <button
               onClick={() => { setStage('idle'); setOutputUrl(null); }}
-              className="block mx-auto mt-3 text-sm text-gray-500 underline"
+              className="block mx-auto mt-4 text-sm font-medium text-neutral-400 hover:text-neutral-300 transition-colors"
             >
               Submit another job
             </button>
@@ -259,24 +235,102 @@ export default function Submitter() {
   );
 }
 
-function SubmitForm({ onSubmit }) {
+function SubmitForm({ onSubmit, visibility, onVisibilityChange, jobName, onJobNameChange, description, onDescriptionChange, password, onPasswordChange }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">WASM Compute</h1>
-        <p className="text-gray-500 mb-8">Submit a distributed compute job</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'var(--color-bg)' }}>
+      <div style={{ borderRadius: '12px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', padding: '2rem', maxWidth: '650px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.5rem', color: 'var(--color-text-primary)', fontFamily: 'var(--font-display)', margin: 0 }}>Chorus</h1>
+          <p style={{ color: 'var(--color-text-secondary)', fontWeight: 500, fontSize: '1.125rem', margin: 0 }}>Distributed WASM compute engine</p>
+        </div>
 
-        <form onSubmit={onSubmit} className="space-y-6">
-          <Field label="C++ Algorithm (.cpp)"   name="source"    accept=".cpp,.cc,.cxx" />
-          <Field label="Data File"              name="dataFile" />
-          <Field label="Chunker Script (.js)"   name="chunker"   accept=".js"
-            hint="module.exports = function chunk(data) → string[]" />
-          <Field label="Assembler Script (.js)" name="assembler" accept=".js"
-            hint="module.exports = function assemble(results[]) → string" />
+        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <TextField label="Job Name" value={jobName} onChange={onJobNameChange} placeholder="e.g., Text Analysis Job" hint="A descriptive name for your job" />
+          <TextField label="Description" value={description} onChange={onDescriptionChange} placeholder="What does this job do?" hint="Optional description of the processing task" isTextarea={true} />
+          
+          <Field label="C++ Algorithm"   name="source"    accept=".cpp,.cc,.cxx"
+            hint="Compiled to WASM for distributed processing" />
+          <Field label="Data File"       name="dataFile"
+            hint="Input data to process" />
+          <Field label="Chunker Script"   name="chunker"   accept=".js"
+            hint="function(buffer, isLastChunk) → chunk | { chunk, consumed } | null" />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem', background: 'var(--color-surface-raised)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-body)' }}>Job Visibility</label>
+              <select
+                value={visibility}
+                onChange={(e) => onVisibilityChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  borderRadius: '6px',
+                  color: 'var(--color-text-primary)',
+                  fontWeight: 500,
+                  fontFamily: 'var(--font-body)',
+                }}
+              >
+                <option value="public">🌐 Public - Anyone can contribute</option>
+                <option value="protected">🔒 Protected - Requires password</option>
+                <option value="private">🔐 Private - Only you can see</option>
+              </select>
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                {visibility === 'public'
+                  ? 'Workers can discover and contribute to this job'
+                  : visibility === 'protected'
+                  ? 'Workers must know the password to contribute'
+                  : 'This job is hidden from all workers'}
+              </p>
+            </div>
+
+            {visibility === 'protected' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-body)' }}>Job Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => onPasswordChange(e.target.value)}
+                  placeholder="Enter a password for workers"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface)',
+                    borderRadius: '6px',
+                    color: 'var(--color-text-primary)',
+                    fontWeight: 500,
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, margin: '0.5rem 0 0 0' }}>
+                  Workers will need to enter this password to access the job
+                </p>
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+            style={{
+              width: '100%',
+              marginTop: '1.5rem',
+              background: 'var(--color-accent)',
+              color: 'white',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 0.2s ease',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              fontFamily: 'var(--font-body)',
+            }}
+            onMouseEnter={(e) => e.target.style.background = 'var(--color-accent-hover)'}
+            onMouseLeave={(e) => e.target.style.background = 'var(--color-accent)'}
           >
             Submit Job
           </button>
@@ -286,17 +340,79 @@ function SubmitForm({ onSubmit }) {
   );
 }
 
+function TextField({ label, value, onChange, placeholder, hint, isTextarea = false }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-body)' }}>{label}</label>
+      {hint && <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem', fontWeight: 500, margin: '0.5rem 0' }}>{hint}</p>}
+      {isTextarea ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface-raised)',
+            borderRadius: '6px',
+            color: 'var(--color-text-primary)',
+            fontFamily: 'var(--font-body)',
+            fontSize: '1rem',
+            resize: 'vertical',
+            minHeight: '6rem',
+            transition: 'border-color 0.2s ease',
+          }}
+          rows="3"
+          onFocus={(e) => e.target.style.borderColor = 'var(--color-accent)'}
+          onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface-raised)',
+            borderRadius: '6px',
+            color: 'var(--color-text-primary)',
+            fontFamily: 'var(--font-body)',
+            fontSize: '1rem',
+            transition: 'border-color 0.2s ease',
+          }}
+          onFocus={(e) => e.target.style.borderColor = 'var(--color-accent)'}
+          onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
+        />
+      )}
+    </div>
+  );
+}
+
 function Field({ label, name, accept, hint }) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-gray-900 mb-1">{label}</label>
-      {hint && <p className="text-xs text-gray-400 mb-2 font-mono">{hint}</p>}
+      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-body)' }}>{label}</label>
+      {hint && <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem', fontWeight: 500, margin: '0.5rem 0' }}>{hint}</p>}
       <input
         type="file"
         name={name}
         accept={accept}
         required
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        style={{
+          width: '100%',
+          padding: '0.75rem',
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-surface-raised)',
+          borderRadius: '6px',
+          color: 'var(--color-text-primary)',
+          fontFamily: 'var(--font-body)',
+          fontSize: '1rem',
+          cursor: 'pointer',
+        }}
       />
     </div>
   );
@@ -315,24 +431,21 @@ function StageIndicator({ stage }) {
   const currentIdx = stages.findIndex(s => s.key === stage);
 
   return (
-    <div className="flex items-center justify-between mt-2">
+    <div className="flex items-center justify-between mt-4">
       {stages.map((s, i) => (
-        <div key={s.key} className="flex items-center">
+        <div key={s.key} className="flex items-center flex-1">
           <div className="flex flex-col items-center">
-            <div className={
-              'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ' +
-              (i < currentIdx   ? 'bg-green-500 text-white' :
-               i === currentIdx ? 'bg-purple-600 text-white animate-pulse' :
-                                  'bg-gray-200 text-gray-500')
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ` +
+              (i < currentIdx   ? 'bg-green-600 text-white' :
+               i === currentIdx ? 'bg-gradient-to-r from-accent-500 to-accent-600 text-white animate-pulse' :
+                                  'bg-primary-700 text-neutral-500')
             }>
               {i < currentIdx ? '✓' : i + 1}
             </div>
-            <span className="text-xs text-gray-500 mt-1">{s.label}</span>
+            <span className="text-xs text-neutral-400 font-semibold mt-2 uppercase tracking-wide">{s.label}</span>
           </div>
           {i < stages.length - 1 && (
-            <div className={
-              'h-0.5 w-4 mx-1 mb-4 ' + (i < currentIdx ? 'bg-green-500' : 'bg-gray-200')
-            } />
+            <div className={`h-0.5 flex-1 mx-2 -mb-4 ` + (i < currentIdx ? 'bg-green-600' : 'bg-primary-700')} />
           )}
         </div>
       ))}

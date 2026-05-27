@@ -60,6 +60,27 @@ export async function listJobs(submitterId) {
   return res.json();
 }
 
+export async function listAvailableJobs() {
+  const res = await fetch(`${API_BASE}/jobs/available`);
+  if (!res.ok) throw new Error(`Failed to fetch available jobs: ${res.status}`);
+  return res.json();
+}
+
+export async function updateJobVisibility(jobId, visibility, password = null) {
+  const payload = { visibility };
+  if (password) {
+    payload.password = password;
+  }
+
+  const res = await fetch(`${API_BASE}/jobs/${jobId}/visibility`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to update visibility: ${res.status}`);
+  return res.json();
+}
+
 // Opens an SSE connection and calls onComplete when job finishes
 export function subscribeToJobEvents(jobId, onComplete) {
   const es = new EventSource(`${API_BASE}/chunks/${jobId}/events`);

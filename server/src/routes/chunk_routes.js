@@ -39,11 +39,23 @@ const uploadChunkMiddleware  = multer({ storage: chunkStorage });
 const uploadResultMiddleware = multer({ storage: resultStorage });
 
 // Order matters — specific routes before parameterised ones
-router.get('/:jobId/events',              jobEvents);
-router.post('/:jobId/claim',              claimChunk);
-router.post('/:jobId/upload',             uploadChunkMiddleware.single('chunk'), uploadChunk);
-router.get('/:jobId/:index',              getChunk);
-router.get('/:jobId/:index/result-data',  getResultData);
-router.post('/:jobId/:index/result',      uploadResultMiddleware.single('result'), submitResult);
+
+// 1. UPLOADER: Upload chunks after job is ready
+router.post('/:jobId/upload', uploadChunkMiddleware.single('chunk'), uploadChunk);
+
+// 2. BOTH: Subscribe to job completion events (SSE)
+router.get('/:jobId/events', jobEvents);
+
+// 3. WORKER: Claim a pending chunk for processing
+router.post('/:jobId/claim', claimChunk);
+
+// 4. WORKER: Download chunk to process locally
+router.get('/:jobId/:index', getChunk);
+
+// 5. WORKER: Submit processed result
+router.post('/:jobId/:index/result', uploadResultMiddleware.single('result'), submitResult);
+
+// 6. UPLOADER: Fetch result data after job complete
+router.get('/:jobId/:index/result-data', getResultData);
 
 module.exports = router;

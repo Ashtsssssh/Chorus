@@ -1,51 +1,390 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Toaster, toast } from 'sonner';
 import Submitter from './Submitter';
 import Worker from './Worker';
+import Auth from './Auth';
+import UserPanel from './UserPanel';
+import JobList from './JobList';
+import MyJobs from './MyJobs';
+import SubmitterModal from './SubmitterModal';
+import UploadedJobDashboard from './UploadedJobDashboard';
+import { ThemeSwitcher } from './ThemeSwitcher';
+
+const API_BASE = 'http://localhost:5000/api';
+
+/**
+ * DESIGN DECISION: Luxury Application Layout
+ * - Minimal fixed navigation: thin line, wordmark, sparse links
+ * - One accent color used only for primary CTA
+ * - Extreme whitespace between sections
+ * - Text-only navigation, no icons
+ * - Refined typography hierarchy
+ * 
+ * ROUTING: URL-based navigation with React Router
+ * - / → Browse jobs
+ * - /my-jobs → My work
+ * - /job/:jobId → Process job
+ * - ?modal=submit → Submit modal overlay
+ */
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('submitter');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showUserPanel, setShowUserPanel] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+
+  // Determine if submit modal is open from URL query params
+  const params = new URLSearchParams(location.search);
+  const showUploadModal = params.get('modal') === 'submit';
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/check`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.authenticated) {
+        const userRes = await fetch(`${API_BASE}/auth/me`, {
+          credentials: 'include',
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          setUser(userData.user);
+        }
+      }
+    } catch (err) {
+      console.error('Auth check failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+      setUser(null);
+      setShowUserPanel(false);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        style={{ background: 'var(--color-bg)' }}
+        className="min-h-screen flex items-center justify-center"
+      >
+        <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: 'var(--tracking-label)' }}>
+          Loading
+        </p>
+      </motion.div>
+    );
+  }
+
+  if (!user) {
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  // Navigation Links
+  const NavLink = ({ label, active, href }) => (
+    <button
+      onClick={() => navigate(href)}
+      className="btn-secondary"
+      style={{
+        fontSize: '0.75rem',
+        fontWeight: 500,
+        color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em',
+        padding: '0.5rem 0',
+        borderBottom: active ? '1px solid var(--color-accent)' : '1px solid var(--color-border-subtle)',
+        transition: 'all var(--transition-fast)',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  const isActive = (path) => location.pathname === path;
 
   return (
-    <div>
-      {/* Navigation */}
-      <nav className="bg-gray-900 text-white sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                WASM Compute
+    <>
+      <Toaster position="top-center" theme="light" />
+
+      <div style={{ background: 'var(--color-bg)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Luxury Fixed Navigation */}
+        <motion.nav
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 'var(--z-fixed)',
+            borderBottom: '1px solid var(--color-border)',
+            background: 'var(--color-surface)',
+            backdropFilter: 'blur(10px)',
+            transition: 'var(--theme-transition)',
+          }}
+        >
+          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 var(--space-lg)' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                height: '4rem',
+              }}
+            >
+              {/* Logo */}
+              <button
+                onClick={() => navigate('/')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.25rem',
+                    fontWeight: 400,
+                    color: 'var(--color-text-primary)',
+                    letterSpacing: 'var(--tracking-heading)',
+                  }}
+                >
+                  Chorus
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.5rem',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.2em',
+                    color: 'var(--color-text-tertiary)',
+                  }}
+                >
+                  WASM
+                </span>
+              </button>
+
+              {/* Center Navigation Links */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 'var(--space-3xl)',
+                  alignItems: 'center',
+                }}
+              >
+                <NavLink
+                  label="Browse"
+                  active={isActive('/')}
+                  href="/"
+                />
+                <NavLink
+                  label="My Work"
+                  active={isActive('/my-jobs')}
+                  href="/my-jobs"
+                />
+              </div>
+
+              {/* Right Actions */}
+              <div style={{ display: 'flex', gap: 'var(--space-lg)', alignItems: 'center' }}>
+                {/* Theme Switcher */}
+                <ThemeSwitcher />
+
+                {/* Divider */}
+                <div style={{
+                  width: '1px',
+                  height: '1.5rem',
+                  background: 'var(--color-border)',
+                }} />
+
+                {/* Upload Button - Only Accent Color Used */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate('/?modal=submit')}
+                  style={{
+                    background: 'var(--color-accent)',
+                    color: 'white',
+                    padding: '0.625rem 1.25rem',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    border: 'none',
+                    cursor: 'pointer',
+                    borderRadius: '1px',
+                    transition: 'background-color var(--transition-fast)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'var(--color-accent-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'var(--color-accent)';
+                  }}
+                >
+                  Submit
+                </motion.button>
+
+                {/* User Menu */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setShowUserPanel(!showUserPanel)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      color: 'var(--color-text-secondary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: '#10b981',
+                      }}
+                    />
+                    {user.username}
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setActiveTab('submitter')}
-                className={`px-4 py-2 rounded-lg font-semibold transition ${
-                  activeTab === 'submitter'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-300 hover:text-white'
-                }`}
-              >
-                Submit Job
-              </button>
-              <button
-                onClick={() => setActiveTab('worker')}
-                className={`px-4 py-2 rounded-lg font-semibold transition ${
-                  activeTab === 'worker'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:text-white'
-                }`}
-              >
-                Worker
-              </button>
-            </div>
           </div>
-        </div>
-      </nav>
+        </motion.nav>
 
-      {/* Content */}
-      <main className="bg-gray-50">
-        {activeTab === 'submitter' ? <Submitter /> : <Worker />}
-      </main>
-    </div>
+        {/* User Panel Dropdown */}
+        {showUserPanel && (
+          <UserPanel
+            user={user}
+            onLogout={handleLogout}
+            onClose={() => setShowUserPanel(false)}
+          />
+        )}
+
+        {/* Upload Modal - Overlay on current page */}
+        {showUploadModal && (
+          <SubmitterModal
+            user={user}
+            isOpen={showUploadModal}
+            onClose={() => navigate(location.pathname)}
+            onJobSubmitted={() => {
+              navigate('/my-jobs');
+            }}
+          />
+        )}
+
+        {/* Main Content Area */}
+        <main
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            paddingTop: '4rem',
+          }}
+        >
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.4 }}
+            style={{ flex: 1 }}
+          >
+            <Routes>
+              {/* Browse Jobs */}
+              <Route
+                path="/"
+                element={
+                  <JobList
+                    onSelectJob={(job) => setSelectedJob(job)}
+                    onStartProcessing={(job) => {
+                      setSelectedJob(job);
+                      navigate(`/job/${job.id}`);
+                    }}
+                  />
+                }
+              />
+
+              {/* My Jobs */}
+              <Route
+                path="/my-jobs"
+                element={<MyJobs user={user} />}
+              />
+
+              {/* View Uploaded Job Dashboard */}
+              <Route
+                path="/job/:jobId/view"
+                element={<UploadedJobDashboard />}
+              />
+
+              {/* Process Job as Worker */}
+              <Route
+                path="/job/:jobId"
+                element={
+                  <div>
+                    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'var(--space-lg)' }}>
+                      <button
+                        onClick={() => navigate('/')}
+                        className="btn-secondary"
+                        style={{
+                          marginBottom: 'var(--space-lg)',
+                        }}
+                      >
+                        ← Back to Browse
+                      </button>
+                    </div>
+                    <Worker />
+                  </div>
+                }
+              />
+
+              {/* Submitter Page (if needed directly) */}
+              <Route
+                path="/submit"
+                element={<Submitter user={user} />}
+              />
+            </Routes>
+          </motion.div>
+        </main>
+      </div>
+    </>
   );
 }

@@ -1,0 +1,50 @@
+{
+  "chunkerId": "t1-chunker",
+  "dataFile": "input_data.bin",
+  "chunkSize": 100,
+  "totalBytes": 500,
+  "expectedChunks": 5,
+  "chunkingStrategy": {
+    "type": "fixed_size",
+    "bytesPerChunk": 100,
+    "overlap": 0,
+    "description": "Simple byte-aligned chunking, no overlap"
+  },
+  "chunks": [
+    {
+      "index": 0,
+      "startByte": 0,
+      "endByte": 100,
+      "expectedIntegers": 25,
+      "description": "Integers 0-24"
+    },
+    {
+      "index": 1,
+      "startByte": 100,
+      "endByte": 200,
+      "expectedIntegers": 25,
+      "description": "Integers 25-49"
+    },
+    {
+      "index": 2,
+      "startByte": 200,
+      "endByte": 300,
+      "expectedIntegers": 25,
+      "description": "Integers 50-74"
+    },
+    {
+      "index": 3,
+      "startByte": 300,
+      "endByte": 400,
+      "expectedIntegers": 25,
+      "description": "Integers 75-99"
+    },
+    {
+      "index": 4,
+      "startByte": 400,
+      "endByte": 500,
+      "expectedIntegers": 25,
+      "description": "Integers 100-124"
+    }
+  ]
+}

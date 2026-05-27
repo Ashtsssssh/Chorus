@@ -9,6 +9,10 @@ const assetSchema = new mongoose.Schema({
 
 const jobSchema = new mongoose.Schema({
   submitterId: { type: String, required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  
+  jobName: { type: String, default: 'Untitled Job' },
+  description: { type: String, default: '' },
 
   status: {
     type: String,
@@ -16,8 +20,24 @@ const jobSchema = new mongoose.Schema({
     default: 'pending',
   },
 
+  visibility: {
+    type: String,
+    enum: ['public', 'private', 'protected'],
+    default: 'public',
+  },
+
+  password: { type: String, default: null },
+
   sourceHash:  { type: String, required: true },
   totalChunks: { type: Number, default: null },
+  
+  assemblerStrategy: {
+    type: String,
+    enum: ['line', 'csv', 'json-array', 'byte-range'],
+    default: 'byte-range',
+  },
+
+  assemblerFilePath: { type: String, default: null },
 
   assets: {
     wasmBinary: { type: assetSchema, default: null },
@@ -42,11 +62,22 @@ jobSchema.methods.toPublic = function () {
     const { diskPath, ...rest } = asset.toObject ? asset.toObject() : asset;
     return rest;
   };
+
+  const completedChunks = this.chunks.filter(c => c.status === 'complete').length;
+  const workers = new Set(this.chunks.filter(c => c.workerId).map(c => c.workerId)).size;
+
   return {
     id:          this._id,
     submitterId: this.submitterId,
+    userId:      this.userId,
+    name:        this.jobName,
+    description: this.description,
     status:      this.status,
+    visibility:  this.visibility,
     totalChunks: this.totalChunks,
+    completedChunks: completedChunks,
+    workerCount: workers,
+    assemblerStrategy: this.assemblerStrategy,
     assets: {
       wasmBinary: strip(this.assets.wasmBinary),
     },

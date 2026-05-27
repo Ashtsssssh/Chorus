@@ -3,10 +3,12 @@ const path = require('path');
 const Job = require('../models/Job');
 const { addClient, removeClient, notifyJobComplete } = require('../services/sse_manager');
 
+
 // POST /api/chunks/:jobId/claim
 async function claimChunk(req, res) {
   const { jobId } = req.params;
   const workerId = req.body.workerId || 'unknown';
+  const workerPassword = req.body.password;
 
   // Find first pending chunk index before updating
   const jobBefore = await Job.findOne({
@@ -16,6 +18,13 @@ async function claimChunk(req, res) {
   });
 
   if (!jobBefore) return res.status(404).json({ error: 'No pending chunks available' });
+
+  // Check password for protected jobs
+  if (jobBefore.visibility === 'protected') {
+    if (!jobBefore.password || jobBefore.password !== workerPassword) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+  }
 
   const pendingChunk = jobBefore.chunks.find(c => c.status === 'pending');
   if (!pendingChunk) return res.status(404).json({ error: 'No pending chunks available' });
@@ -132,7 +141,9 @@ async function getResultData(req, res) {
     return res.status(404).json({ error: 'Result file missing' });
   }
 
-  res.sendFile(path.resolve(chunk.resultPath));
+  // Read result as text for assembler worker
+  const data = fs.readFileSync(chunk.resultPath, 'utf-8');
+  res.type('text/plain').send(data);
 }
 
 // GET /api/chunks/:jobId/events

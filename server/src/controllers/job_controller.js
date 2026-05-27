@@ -14,4 +14,24 @@ async function listJobs(req, res) {
   res.json({ jobs: jobs.map(j => j.toPublic()) });
 }
 
-module.exports = { getJob, listJobs };
+async function listAvailableJobs(req, res) {
+  const jobs = await Job.find({ 
+    status: 'distributing', 
+    visibility: { $in: ['public', 'protected'] } 
+  }).sort({ createdAt: -1 });
+  
+  // Enrich with progress info
+  const enriched = jobs.map(j => {
+    const job = j.toPublic();
+    const completedChunks = j.chunks.filter(c => c.status === 'complete').length;
+    return {
+      ...job,
+      completedChunks,
+      progressPercent: j.totalChunks ? Math.round((completedChunks / j.totalChunks) * 100) : 0,
+    };
+  });
+  
+  res.json({ jobs: enriched });
+}
+
+module.exports = { getJob, listJobs, listAvailableJobs };

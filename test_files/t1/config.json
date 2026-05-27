@@ -1,0 +1,14 @@
+{
+  "testSetName": "Integer Sum Processor",
+  "description": "Processes chunks of integers and computes their sum",
+  "algorithm": "Distributed sum aggregation",
+  "chunkStrategy": "Fixed-size 100-byte chunks (25 integers per chunk)",
+  "expectedBehavior": "Each worker sums its assigned integers; server collects partial sums",
+  "compilationCommand": "emcc -o processor.js processor.cpp -s WASM=1 -s EXPORTED_FUNCTIONS='[\"_processChunk\",\"_processBuffer\"]' -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\"]'",
+  "inputFormat": "Binary stream of 32-bit signed integers (little-endian)",
+  "outputFormat": "Single 32-bit signed integer (partial sum)",
+  "assembly": {
+    "method": "Sum all partial results",
+    "expectedFinalResult": 12750
+  }
+}

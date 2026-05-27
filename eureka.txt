@@ -18,4 +18,5 @@ A-shift chunking to job uploader's device, reduce stress and safety issues as we
 
 
 
-
+Q-
+A- adding assinged worker check while naccepting the respojnse

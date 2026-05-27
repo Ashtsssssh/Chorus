@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chorus</title>
+    
+    <!-- Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Work+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- Initialize theme before React mounts to prevent flash -->
+    <script>
+      (function() {
+        const DEFAULT_THEME = 'slate-amber';
+        const STORAGE_KEY = 'app-theme';
+        const THEMES = {
+          'slate-amber': 'dark',
+          'midnight-coral': 'dark',
+          'forest-gold': 'dark',
+          'ink-sky': 'dark',
+          'warm-cream': 'light',
+          'monochrome': 'dark',
+        };
+        
+        const saved = localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME;
+        document.documentElement.setAttribute('data-theme', saved);
+        document.documentElement.setAttribute('data-mode', THEMES[saved] || 'dark');
+        document.documentElement.classList.toggle('dark', THEMES[saved] === 'dark');
+      })();
+    </script>
+    
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
