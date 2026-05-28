@@ -19,22 +19,3 @@ pnpm-debug.log*
 
 .DS_Store
 Thumbs.db
-
-# Client
-client/node_modules/
-client/dist/
-
-# Editor / IDE
-.vscode/
-.idea/
-
-# Server caches and SDKs
-server/emsdk/
-server/.cache/
-server/downloads/
-
-# Logs
-*.log
-
-# Generated lockfiles (if you prefer to ignore them locally)
-# package-lock.json
