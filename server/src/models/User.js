@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+// Database indexes for common queries
+// Note: username and email already indexed via unique: true property
+userSchema.index({ createdAt: -1 });
+
 // Hash password before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
