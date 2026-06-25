@@ -44,7 +44,7 @@ app.use('/api/uploader', optionalAuth, uploaderRoutes);  // Job submission + man
 app.use('/api/jobs', optionalAuth, workerRoutes);        // Job discovery (workers)
 app.use('/api/chunks', optionalAuth, chunkRoutes);       // Chunk processing
 
-const PORT =  5001;
+const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

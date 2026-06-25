@@ -30,14 +30,6 @@ const jobSchema = new mongoose.Schema({
 
   sourceHash:  { type: String, required: true },
   totalChunks: { type: Number, default: null },
-  
-  assemblerStrategy: {
-    type: String,
-    enum: ['line', 'csv', 'json-array', 'byte-range'],
-    default: 'byte-range',
-  },
-
-  assemblerFilePath: { type: String, default: null },
 
   assets: {
     wasmBinary: { type: assetSchema, default: null },
@@ -49,7 +41,6 @@ const jobSchema = new mongoose.Schema({
     status:     { type: String,  enum: ['pending', 'in-flight', 'complete', 'failed'], default: 'pending' },
     workerId:   { type: String,  default: null },
     resultPath: { type: String,  default: null },
-    resultHash: { type: String,  default: null },
   }],
 
   errorDetail: { type: String, default: null },
@@ -77,7 +68,6 @@ jobSchema.methods.toPublic = function () {
     totalChunks: this.totalChunks,
     completedChunks: completedChunks,
     workerCount: workers,
-    assemblerStrategy: this.assemblerStrategy,
     assets: {
       wasmBinary: strip(this.assets.wasmBinary),
     },
