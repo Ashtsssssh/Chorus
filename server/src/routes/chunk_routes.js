@@ -12,6 +12,7 @@ const {
 } = require('../controllers/chunk_controller');
 
 const router = express.Router();
+const { chunkUploadLimiter } = require('../middleware/rateLimiter');
 
 const chunkStorage = multer.diskStorage({
   destination(req, file, cb) {
@@ -41,7 +42,8 @@ const uploadResultMiddleware = multer({ storage: resultStorage });
 // Order matters — specific routes before parameterised ones
 
 // 1. UPLOADER: Upload chunks after job is ready
-router.post('/:jobId/upload', uploadChunkMiddleware.single('chunk'), uploadChunk);
+// Apply chunk upload rate limiter per user/IP
+router.post('/:jobId/upload', chunkUploadLimiter, uploadChunkMiddleware.single('chunk'), uploadChunk);
 
 // 2. BOTH: Subscribe to job completion events (SSE)
 router.get('/:jobId/events', jobEvents);
@@ -53,7 +55,8 @@ router.post('/:jobId/claim', claimChunk);
 router.get('/:jobId/:index', getChunk);
 
 // 5. WORKER: Submit processed result
-router.post('/:jobId/:index/result', uploadResultMiddleware.single('result'), submitResult);
+// Apply chunk upload limiter to result submission as well
+router.post('/:jobId/:index/result', chunkUploadLimiter, uploadResultMiddleware.single('result'), submitResult);
 
 // 6. UPLOADER: Fetch result data after job complete
 router.get('/:jobId/:index/result-data', getResultData);
