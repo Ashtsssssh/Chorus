@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
+const { validators, ValidationError } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -9,17 +10,24 @@ router.post('/signup', async (req, res) => {
   try {
     const { username, email, password, confirmPassword } = req.body;
 
-    // Validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required' });
+    // Input validation with detailed error messages
+    try {
+      validators.username(username);
+      validators.email(email);
+      validators.password(password, 8);
+    } catch (validationErr) {
+      return res.status(400).json({
+        error: validationErr.message,
+        field: validationErr.field,
+      });
     }
 
+    // Password confirmation
     if (password !== confirmPassword) {
-      return res.status(400).json({ error: 'Passwords do not match' });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      return res.status(400).json({
+        error: 'Passwords do not match. Please ensure both password fields are identical.',
+        field: 'confirmPassword',
+      });
     }
 
     // Check if user exists
@@ -29,9 +37,15 @@ router.post('/signup', async (req, res) => {
 
     if (existingUser) {
       if (existingUser.username === username.toLowerCase()) {
-        return res.status(409).json({ error: 'Username already taken' });
+        return res.status(409).json({
+          error: `Username "${username}" is already taken. Please choose a different username.`,
+          field: 'username',
+        });
       }
-      return res.status(409).json({ error: 'Email already registered' });
+      return res.status(409).json({
+        error: `Email "${email}" is already registered. Please try a different email or use login instead.`,
+        field: 'email',
+      });
     }
 
     // Create user
@@ -53,7 +67,7 @@ router.post('/signup', async (req, res) => {
     });
   } catch (err) {
     console.error('Signup error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to create account. Please try again later.' });
   }
 });
 
@@ -62,8 +76,19 @@ router.post('/login', async (req, res) => {
   try {
     const { usernameOrEmail, password } = req.body;
 
-    if (!usernameOrEmail || !password) {
-      return res.status(400).json({ error: 'Username/email and password are required' });
+    // Input validation
+    if (!usernameOrEmail) {
+      return res.status(400).json({
+        error: 'Username or email is required',
+        field: 'usernameOrEmail',
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({
+        error: 'Password is required',
+        field: 'password',
+      });
     }
 
     // Search by username or email
@@ -75,13 +100,19 @@ router.post('/login', async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid username/email or password' });
+      return res.status(401).json({
+        error: 'No account found with this username or email. Please check and try again.',
+        field: 'usernameOrEmail',
+      });
     }
 
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid username/email or password' });
+      return res.status(401).json({
+        error: 'Incorrect password. Please try again.',
+        field: 'password',
+      });
     }
 
     // Update last login
