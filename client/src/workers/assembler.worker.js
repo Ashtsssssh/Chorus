@@ -1,10 +1,21 @@
-// assembler.worker.js
-// Place in: client/public/workers/assembler.worker.js
+// src/workers/assembler.worker.js
+// Module worker — imports getResultData directly from api.js.
+// No need to pass serverUrl; api.js reads VITE_API_BASE internally.
+// Must be created with { type: 'module' } and new URL(..., import.meta.url).
+
+import { getResultData } from '../api/api.js';
 
 const FETCH_CONCURRENCY = 4;
 
 self.onmessage = async (e) => {
-  const { jobId, totalChunks, assemblerCode, serverUrl } = e.data;
+  const { jobId, totalChunks, assemblerCode } = e.data;
+
+  console.log('[assembler.worker] received message:', { jobId, totalChunks });
+
+  if (!jobId || totalChunks === undefined || !assemblerCode) {
+    self.postMessage({ type: 'error', message: 'Missing required fields (jobId, totalChunks, assemblerCode)' });
+    return;
+  }
 
   try {
     // Load user's assembler function
@@ -17,12 +28,14 @@ self.onmessage = async (e) => {
         ? module.exports
         : Object.values(module.exports)[0];
       if (typeof assemblerFn !== 'function') throw new Error('Assembler must export a function');
+      console.log('[assembler.worker] ✅ Assembler function loaded');
     } catch (err) {
       throw new Error('Assembler load failed: ' + err.message);
     }
 
-    // Fetch result chunks with concurrency limit
+    // Fetch all result chunks with concurrency limit
     self.postMessage({ type: 'status', message: 'Fetching results...' });
+    console.log(`[assembler.worker] Fetching ${totalChunks} result chunks via api.js...`);
 
     const results = new Array(totalChunks);
     let fetched = 0;
@@ -31,14 +44,10 @@ self.onmessage = async (e) => {
     const fetchWorker = async () => {
       while (queue.length > 0) {
         const index = queue.shift();
-
-        const res = await fetch(
-          serverUrl + '/api/chunks/' + jobId + '/' + index + '/result-data'
-        );
-        if (!res.ok) throw new Error('Failed to fetch result ' + index + ': ' + res.status);
-
-        results[index] = await res.text();
+        // Uses api.js getResultData — same auth/cookies/error-handling as the rest of the app
+        results[index] = await getResultData(jobId, index);
         fetched++;
+        console.log(`[assembler.worker] ✅ fetched chunk ${index} (${fetched}/${totalChunks})`);
         self.postMessage({ type: 'progress', fetched, totalChunks });
       }
     };
@@ -48,8 +57,9 @@ self.onmessage = async (e) => {
       fetchWorker
     );
     await Promise.all(workers);
+    console.log('[assembler.worker] ✅ All results fetched, running assembler...');
 
-    // Run assembler
+    // Run user's assembler
     self.postMessage({ type: 'status', message: 'Assembling...' });
 
     let finalOutput;
@@ -61,9 +71,11 @@ self.onmessage = async (e) => {
     }
 
     const blob = new Blob([finalOutput], { type: 'application/octet-stream' });
+    console.log(`[assembler.worker] ✅ Assembly complete: blob size=${blob.size}`);
     self.postMessage({ type: 'done', blob });
 
   } catch (err) {
+    console.error('[assembler.worker] ❌ Error:', err.message);
     self.postMessage({ type: 'error', message: err.message });
   }
 };
