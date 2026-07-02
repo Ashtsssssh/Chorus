@@ -1,0 +1,36 @@
+ISKE BAAD UI DEKH DEKHKE CHANGES 
+
+
+FUNCTIONALITY_WISE_CLEANUP
+
+AUTH/LOGIN
+Auth.jsx 
+api.js (auth part)
+
+
+UPLOADER WF 
+
+  Uploader.jsx
+  api.js (uploader part)
+  .env 
+  
+
+VIEWS
+
+uploadedjobsdashboard.jsx
+
+WORKER WF
+
+worker.jsx
+
+
+ASSEMBLER WF
+
+
+
+
+GET JOB OF MUCH TYPE  
+
+
+
+USER STUFF 

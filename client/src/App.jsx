@@ -1,32 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Toaster, toast } from 'sonner';
-import Submitter from './Submitter';
-import Worker from './Worker';
-import Auth from './Auth';
-import UserPanel from './UserPanel';
-import JobList from './JobList';
-import MyJobs from './MyJobs';
-import SubmitterModal from './SubmitterModal';
-import UploadedJobDashboard from './UploadedJobDashboard';
-import { ThemeSwitcher } from './ThemeSwitcher';
-
-const API_BASE = 'http://localhost:5000/api';
+import { Toaster } from 'sonner';
+import './styles/App.css';
+import Submitter from './pages/Submitter';
+import Worker from './pages/Worker';
+import Auth from './pages/Auth';
+import UserPanel from './components/UserPanel';
+import JobList from './pages/JobList';
+import MyJobs from './pages/MyJobs';
+import UploadedJobDashboard from './pages/UploadedJobDashboard';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { checkAuth, getCurrentUser, logout } from './api/api.js';
 
 /**
- * DESIGN DECISION: Luxury Application Layout
- * - Minimal fixed navigation: thin line, wordmark, sparse links
- * - One accent color used only for primary CTA
- * - Extreme whitespace between sections
- * - Text-only navigation, no icons
- * - Refined typography hierarchy
- * 
  * ROUTING: URL-based navigation with React Router
- * - / → Browse jobs
- * - /my-jobs → My work
- * - /job/:jobId → Process job
- * - ?modal=submit → Submit modal overlay
+ * - /           → Browse jobs
+ * - /my-jobs    → My submitted jobs
+ * - /submit     → Submit a new job (full page)
+ * - /job/:jobId → Process job as a worker
+ * - /job/:jobId/view → View uploaded job dashboard
  */
 
 export default function App() {
@@ -35,30 +28,17 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showUserPanel, setShowUserPanel] = useState(false);
-  const [selectedJob, setSelectedJob] = useState(null);
-
-  // Determine if submit modal is open from URL query params
-  const params = new URLSearchParams(location.search);
-  const showUploadModal = params.get('modal') === 'submit';
 
   useEffect(() => {
-    checkAuth();
+    runAuthCheck();
   }, []);
 
-  const checkAuth = async () => {
+  const runAuthCheck = async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/check`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
+      const data = await checkAuth();
       if (data.authenticated) {
-        const userRes = await fetch(`${API_BASE}/auth/me`, {
-          credentials: 'include',
-        });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          setUser(userData.user);
-        }
+        const userData = await getCurrentUser();
+        if (userData?.user) setUser(userData.user);
       }
     } catch (err) {
       console.error('Auth check failed:', err);
@@ -73,7 +53,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+      await logout();
       setUser(null);
       setShowUserPanel(false);
     } catch (err) {
@@ -101,22 +81,22 @@ export default function App() {
     return <Auth onAuthSuccess={handleAuthSuccess} />;
   }
 
-  // Navigation Links
-  const NavLink = ({ label, active, href }) => (
+  const isActive = (path) => location.pathname === path;
+
+  const NavLink = ({ label, href }) => (
     <button
       onClick={() => navigate(href)}
-      className="btn-secondary"
       style={{
-        fontSize: '0.75rem',
-        fontWeight: 500,
-        color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+        fontSize: '0.875rem',
+        fontWeight: 600,
+        color: isActive(href) ? 'var(--color-surface)' : 'var(--color-text-secondary)',
         textTransform: 'uppercase',
         letterSpacing: '0.1em',
-        padding: '0.5rem 0',
-        borderBottom: active ? '1px solid var(--color-accent)' : '1px solid var(--color-border-subtle)',
+        padding: '0.5rem 1rem',
+        background: isActive(href) ? 'var(--color-text-primary)' : 'transparent',
+        border: isActive(href) ? '1px solid var(--color-text-primary)' : '1px solid var(--color-border)',
+        borderRadius: '8px',
         transition: 'all var(--transition-fast)',
-        background: 'none',
-        border: 'none',
         cursor: 'pointer',
       }}
     >
@@ -124,14 +104,12 @@ export default function App() {
     </button>
   );
 
-  const isActive = (path) => location.pathname === path;
-
   return (
     <>
       <Toaster position="top-center" theme="light" />
 
       <div style={{ background: 'var(--color-bg)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        {/* Luxury Fixed Navigation */}
+        {/* Fixed Navigation */}
         <motion.nav
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -144,7 +122,6 @@ export default function App() {
             zIndex: 'var(--z-fixed)',
             borderBottom: '1px solid var(--color-border)',
             background: 'var(--color-surface)',
-            backdropFilter: 'blur(10px)',
             transition: 'var(--theme-transition)',
           }}
         >
@@ -195,62 +172,38 @@ export default function App() {
               </button>
 
               {/* Center Navigation Links */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 'var(--space-3xl)',
-                  alignItems: 'center',
-                }}
-              >
-                <NavLink
-                  label="Browse"
-                  active={isActive('/')}
-                  href="/"
-                />
-                <NavLink
-                  label="My Work"
-                  active={isActive('/my-jobs')}
-                  href="/my-jobs"
-                />
+              <div style={{ display: 'flex', gap: 'var(--space-3xl)', alignItems: 'center' }}>
+                <NavLink label="Browse" href="/" />
+                <NavLink label="My Work" href="/my-jobs" />
               </div>
 
               {/* Right Actions */}
               <div style={{ display: 'flex', gap: 'var(--space-lg)', alignItems: 'center' }}>
-                {/* Theme Switcher */}
                 <ThemeSwitcher />
 
-                {/* Divider */}
-                <div style={{
-                  width: '1px',
-                  height: '1.5rem',
-                  background: 'var(--color-border)',
-                }} />
+                <div style={{ width: '1px', height: '1.5rem', background: 'var(--color-border)' }} />
 
-                {/* Upload Button - Only Accent Color Used */}
+                {/* Submit Job Button → dedicated /submit page */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => navigate('/?modal=submit')}
+                  onClick={() => navigate('/submit')}
                   style={{
-                    background: 'var(--color-accent)',
+                    background: isActive('/submit') ? 'var(--color-accent-hover)' : 'var(--color-accent)',
                     color: 'white',
                     padding: '0.625rem 1.25rem',
                     fontFamily: 'var(--font-body)',
-                    fontSize: '0.75rem',
+                    fontSize: '0.875rem',
                     fontWeight: 500,
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',
                     border: 'none',
                     cursor: 'pointer',
-                    borderRadius: '1px',
+                    borderRadius: '8px',
                     transition: 'background-color var(--transition-fast)',
                   }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = 'var(--color-accent-hover)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = 'var(--color-accent)';
-                  }}
+                  onMouseEnter={(e) => { e.target.style.background = 'var(--color-accent-hover)'; }}
+                  onMouseLeave={(e) => { e.target.style.background = isActive('/submit') ? 'var(--color-accent-hover)' : 'var(--color-accent)'; }}
                 >
                   Submit
                 </motion.button>
@@ -264,7 +217,7 @@ export default function App() {
                       border: 'none',
                       padding: 0,
                       cursor: 'pointer',
-                      fontSize: '0.75rem',
+                      fontSize: '0.875rem',
                       fontWeight: 500,
                       color: 'var(--color-text-secondary)',
                       textTransform: 'uppercase',
@@ -299,18 +252,6 @@ export default function App() {
           />
         )}
 
-        {/* Upload Modal - Overlay on current page */}
-        {showUploadModal && (
-          <SubmitterModal
-            user={user}
-            isOpen={showUploadModal}
-            onClose={() => navigate(location.pathname)}
-            onJobSubmitted={() => {
-              navigate('/my-jobs');
-            }}
-          />
-        )}
-
         {/* Main Content Area */}
         <main
           style={{
@@ -334,26 +275,28 @@ export default function App() {
                 path="/"
                 element={
                   <JobList
-                    onSelectJob={(job) => setSelectedJob(job)}
-                    onStartProcessing={(job) => {
-                      setSelectedJob(job);
-                      navigate(`/job/${job.id}`);
-                    }}
+                    onSelectJob={() => {}}
+                    onStartProcessing={(job) => navigate(`/job/${job.id}`)}
                   />
                 }
               />
 
               {/* My Jobs */}
+              <Route path="/my-jobs" element={<MyJobs user={user} />} />
+
+              {/* Submit a new job */}
               <Route
-                path="/my-jobs"
-                element={<MyJobs user={user} />}
+                path="/submit"
+                element={
+                  <Submitter
+                    user={user}
+                    onJobSubmitted={(jobId) => navigate(`/job/${jobId}/view`)}
+                  />
+                }
               />
 
               {/* View Uploaded Job Dashboard */}
-              <Route
-                path="/job/:jobId/view"
-                element={<UploadedJobDashboard />}
-              />
+              <Route path="/job/:jobId/view" element={<UploadedJobDashboard />} />
 
               {/* Process Job as Worker */}
               <Route
@@ -364,9 +307,7 @@ export default function App() {
                       <button
                         onClick={() => navigate('/')}
                         className="btn-secondary"
-                        style={{
-                          marginBottom: 'var(--space-lg)',
-                        }}
+                        style={{ marginBottom: 'var(--space-lg)' }}
                       >
                         ← Back to Browse
                       </button>
@@ -374,12 +315,6 @@ export default function App() {
                     <Worker />
                   </div>
                 }
-              />
-
-              {/* Submitter Page (if needed directly) */}
-              <Route
-                path="/submit"
-                element={<Submitter user={user} />}
               />
             </Routes>
           </motion.div>

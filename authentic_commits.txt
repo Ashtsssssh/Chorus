@@ -1,0 +1,75 @@
+# 1. Update project configuration and backend dependencies
+git add .gitignore server/package.json server/package-lock.json
+git commit -m "chore: update gitignore and backend dependencies"
+
+# 2. Setup database connection and core models
+git add server/src/config/db.js server/src/models/User.js server/src/models/job.js server/src/models/Activity.js
+git commit -m "feat(server): setup database connection and core models"
+
+# 3. Implement activity logger and validation middleware
+git add server/src/utils/activityLogger.js server/src/middleware/validation.js server/src/middleware/rateLimiter.js
+git commit -m "feat(server): implement activity logger and validation middleware"
+
+# 4. Add core job and chunk controllers, clean up legacy services
+git rm -q --ignore-unmatch server/src/services/assembler_service.js server/src/services/chunker_service.js
+git add server/src/controllers/job_controller.js server/src/controllers/chunk_controller.js server/src/controllers/compile_controller.js
+git commit -m "feat(server): add core job and chunk controllers"
+
+# 5. Configure API routes and server entry point
+git add server/src/routes/ server/src/index.js
+git commit -m "feat(server): configure API routes and server entry point"
+
+# 6. Setup frontend vite, tailwind, and dependencies
+git add client/package.json client/package-lock.json client/tailwind.config.js
+git commit -m "chore(client): setup vite, tailwind, and dependencies"
+
+# 7. Setup global styling and theme utilities
+git rm -q --ignore-unmatch client/src/index.css client/src/App.css client/src/ThemeSwitcher.jsx client/src/themeInit.js
+git add client/src/styles/ client/src/utils/themeInit.js
+git commit -m "feat(client): setup global styling and theme utilities"
+
+# 8. Add reusable UI components and API helpers
+git rm -q --ignore-unmatch client/src/api.js
+git add client/src/components/ client/src/api/
+git commit -m "feat(client): add reusable UI components and API helpers"
+
+# 9. Implement worker execution and WebAssembly runner
+git rm -q --ignore-unmatch client/src/Worker.jsx client/src/wasmRunner.js client/public/workers/assembler.worker.js client/public/workers/chunker.worker.js
+git add client/src/pages/Worker.jsx client/src/utils/wasmRunner.js client/src/workers/
+git commit -m "feat(client): implement worker execution and WebAssembly runner"
+
+# 10. Add job submission and uploader dashboard
+git rm -q --ignore-unmatch client/src/Submitter.jsx client/src/UploadedJobDashboard.jsx client/src/SubmitterModal.jsx
+git add client/src/pages/Submitter.jsx client/src/pages/UploadedJobDashboard.jsx
+git commit -m "feat(client): add job submission and uploader dashboard"
+
+# 11. Implement job browsing and personal jobs view
+git rm -q --ignore-unmatch client/src/JobList.jsx client/src/MyJobs.jsx
+git add client/src/pages/JobList.jsx client/src/pages/MyJobs.jsx
+git commit -m "feat(client): implement job browsing and personal jobs view"
+
+# 12. Add authentication and main application routing
+git rm -q --ignore-unmatch client/src/Auth.jsx client/src/UserPanel.jsx client/src/assets/hero.png client/src/assets/react.svg client/src/assets/vite.svg
+git add client/src/pages/Auth.jsx client/src/pages/UserPanel.jsx client/src/App.jsx client/src/main.jsx
+git commit -m "feat(client): add authentication and main application routing"
+
+# 13. Add architecture diagrams and implementation plans
+git add architecture_diagram.svg sequence_diagram.svg REFINEMENTS.md
+git commit -m "docs: add architecture diagrams and implementation plans"
+
+# 14. Add sample job files and delivery documents
+git add test_files/
+git commit -m "test: add sample job files and delivery documents"
+
+# 15. Update main README and remove legacy files
+git rm -r -q --ignore-unmatch Architecture.txt CODE_CLEANUP_REPORT.md CODE_QUALITY_ANALYSIS_REPORT.md COMPREHENSIVE_DOCUMENTATION.md STRUCTURE.md TODO.txt client/README.md client/THEME_DOCUMENTATION.md client/tests/ eureka.txt server/ROUTES_ARCHITECTURE.md client/.gitignore
+git add README.md .docs/ fixed.md frontend_refined.md
+git commit -m "docs: update main README and finalize repository structure"
+
+# Optional: Catch-all for any remaining untracked/modified files
+git add .
+git commit -m "chore: final cleanup and bug fixes"
+
+# 16. Delete any files that are tracked in the repo but missing from this local directory
+git add -u
+git commit -m "chore: remove missing files from repository"
