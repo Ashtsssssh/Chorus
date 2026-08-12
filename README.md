@@ -122,25 +122,3 @@ npm run dev
 4. Open a secondary browser session (to act as a worker node) and proceed to the **Browse Jobs** section.
 5. Select **Start Processing** to initialize distributed execution.
 
----
-
-## 6. Contribution Guidelines
-
-Contributions to the codebase are encouraged. For developers seeking to contribute, please refer to the `REFINEMENTS.md` document for a prioritized backlog of system enhancements, including:
-- In-flight chunk timeout management and automated release protocols.
-- Advanced WASM module caching mechanisms.
-- Implementation of Server-Sent Events (SSE) for real-time telemetry.
-
-### 6.1. Standard Workflow
-
-1. **Fork** the repository.
-2. **Create** a feature branch (`git checkout -b feature/FeatureName`).
-3. **Commit** your modifications (`git commit -m 'Implement FeatureName'`).
-4. **Push** to the specified branch (`git push origin feature/FeatureName`).
-5. **Open** a Pull Request for review.
-
----
-
-## 7. License
-
-This project is distributed under the MIT License. Please consult the `LICENSE` file for full regulatory details.
